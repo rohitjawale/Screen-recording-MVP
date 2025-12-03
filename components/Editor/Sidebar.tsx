@@ -1,6 +1,6 @@
 import React from 'react';
 import { EditorConfig, BACKGROUND_PRESETS } from '../../types';
-import { Sliders, Maximize, Circle, BoxSelect, Download } from 'lucide-react';
+import { Sliders, Maximize, Circle, BoxSelect, Download, Sparkles, MousePointer2 } from 'lucide-react';
 
 interface SidebarProps {
   config: EditorConfig;
@@ -45,6 +45,31 @@ export const Sidebar: React.FC<SidebarProps> = ({ config, onChange, onExport }) 
 
       <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
         
+        {/* Magic / Auto Actions */}
+        <div className="mb-8 p-4 bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-xl">
+           <div className="flex items-center gap-2 mb-3 text-blue-400 text-xs font-bold uppercase tracking-wider">
+             <Sparkles size={12} />
+             Magic Effects
+           </div>
+           
+           <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                 <MousePointer2 size={14} className="text-gray-300" />
+                 <span className="text-sm text-gray-200">Auto Zoom</span>
+              </div>
+              
+              <button 
+                onClick={() => handleChange('autoZoom', !config.autoZoom)}
+                className={`w-10 h-5 rounded-full relative transition-colors duration-300 ${config.autoZoom ? 'bg-blue-500' : 'bg-gray-700'}`}
+              >
+                <div className={`w-3 h-3 bg-white rounded-full absolute top-1 transition-all duration-300 ${config.autoZoom ? 'left-6' : 'left-1'}`} />
+              </button>
+           </div>
+           <p className="text-[10px] text-gray-500 mt-2 leading-tight">
+             Simulate camera movement following cursor actions.
+           </p>
+        </div>
+
         {/* Aspect Ratio */}
         <div className="mb-8">
           <label className="block text-gray-400 text-xs uppercase tracking-wider font-semibold mb-3">Canvas Size</label>

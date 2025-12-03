@@ -13,6 +13,7 @@ export interface EditorConfig {
   background: string; // Gradient or solid color string
   aspectRatio: 'original' | '16:9' | '1:1' | '4:3' | '9:16';
   zoom: number;
+  autoZoom: boolean; // New feature: Auto-follow cursor simulation
 }
 
 export interface VideoMetadata {
@@ -29,6 +30,7 @@ export const DEFAULT_EDITOR_CONFIG: EditorConfig = {
   background: 'linear-gradient(135deg, #FF9A9E 0%, #FECFEF 99%, #FECFEF 100%)',
   aspectRatio: '16:9',
   zoom: 1,
+  autoZoom: false,
 };
 
 // Pre-defined fancy backgrounds

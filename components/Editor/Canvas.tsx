@@ -50,7 +50,7 @@ export const Canvas: React.FC<CanvasProps> = ({
        {/* The "Exportable" Area Container */}
        <div 
          id="export-canvas"
-         className="relative flex items-center justify-center transition-all duration-300 ease-in-out shadow-2xl overflow-hidden"
+         className="relative flex items-center justify-center transition-all duration-500 ease-in-out shadow-2xl overflow-hidden"
          style={{
             ...getAspectRatioStyle(),
             background: config.background,
@@ -59,21 +59,41 @@ export const Canvas: React.FC<CanvasProps> = ({
        >
           {/* Video Container with User Styles */}
           <div 
-             className="relative overflow-hidden transition-all duration-300"
+             className="relative overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.25,1,0.5,1)]"
              style={{
                borderRadius: `${config.roundness}px`,
                boxShadow: `0 ${config.shadow}px ${config.shadow * 2}px rgba(0,0,0,${config.shadow > 0 ? 0.3 : 0})`,
              }}
           >
-             <video
-               ref={videoRef}
-               src={videoUrl}
-               className="block max-w-full max-h-full object-contain bg-black"
-               onTimeUpdate={(e) => onTimeUpdate(e.currentTarget.currentTime)}
-               onLoadedMetadata={(e) => onDurationChange(e.currentTarget.duration)}
-               playsInline
-               loop
-             />
+             {/* 
+                Wrapper for simulated zoom. 
+                In a real app, this would use data points to translate(x,y).
+                Here we simulate a gentle center zoom if enabled.
+             */}
+             <div 
+               className="w-full h-full transition-transform duration-[2000ms] ease-in-out"
+               style={{
+                 transform: config.autoZoom ? 'scale(1.4)' : 'scale(1)',
+                 transformOrigin: 'center center' 
+               }}
+             >
+               <video
+                 ref={videoRef}
+                 src={videoUrl}
+                 className="block max-w-full max-h-full object-contain bg-black"
+                 onTimeUpdate={(e) => onTimeUpdate(e.currentTarget.currentTime)}
+                 onLoadedMetadata={(e) => onDurationChange(e.currentTarget.duration)}
+                 playsInline
+                 loop
+               />
+               
+               {/* Simulated Cursor Overlay (Only visible when Auto Zoom is On) */}
+               {config.autoZoom && isPlaying && (
+                 <div className="absolute top-1/2 left-1/2 w-8 h-8 pointer-events-none z-10 animate-pulse opacity-50 -translate-x-1/2 -translate-y-1/2">
+                   <div className="w-full h-full rounded-full border-2 border-yellow-400 bg-yellow-400/20 blur-[2px]" />
+                 </div>
+               )}
+             </div>
           </div>
 
           {/* Optional: Watermark or Decor */}
