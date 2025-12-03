@@ -1,0 +1,9 @@
+{
+  "name": "Web Screen Recorder MVP",
+  "description": "A browser-based screen recorder with a built-in aesthetic video editor inspired by Screen Studio.",
+  "requestFramePermissions": [
+    "microphone",
+    "camera",
+    "display-capture"
+  ]
+}
