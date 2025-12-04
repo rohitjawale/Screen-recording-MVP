@@ -16,13 +16,24 @@ export const Editor: React.FC<EditorProps> = ({ videoMetadata }) => {
   const [zoomEvents, setZoomEvents] = useState<ZoomEvent[]>([]);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // Initialize some mock zoom events once metadata is loaded or just on mount
-  // In a real app, these would be detected via CV or passed from recording metadata
+  // Initialize diverse mock zoom events to demonstrate capabilities
   useEffect(() => {
      setZoomEvents([
-       { id: '1', startTime: 2, duration: 3, x: 0.2, y: 0.3, scale: 1.5 },
-       { id: '2', startTime: 8, duration: 4, x: 0.8, y: 0.7, scale: 1.6 },
-       { id: '3', startTime: 15, duration: 2.5, x: 0.5, y: 0.5, scale: 1.4 },
+       // 1. Mouse Click (Top Left Menu)
+       { id: '1', type: 'click', startTime: 2, duration: 2.5, x: 0.15, y: 0.2, scale: 1.6 },
+       
+       // 2. Input Focus (Center-Left)
+       { id: '2', type: 'focus', startTime: 6, duration: 3, x: 0.3, y: 0.5, scale: 1.8 },
+       
+       // 3. Drag Operation (Moving from Left to Right)
+       // This event includes xEnd/yEnd to allow the camera to track the movement
+       { id: '3', type: 'drag', startTime: 11, duration: 4, x: 0.2, y: 0.7, xEnd: 0.8, yEnd: 0.7, scale: 1.5 },
+       
+       // 4. Double Click (Bottom Right)
+       { id: '4', type: 'double_click', startTime: 18, duration: 2, x: 0.85, y: 0.85, scale: 2.0 },
+       
+       // 5. Selection Highlight (Center Area)
+       { id: '5', type: 'selection', startTime: 22, duration: 3, x: 0.5, y: 0.4, scale: 1.4 },
      ]);
   }, []);
 

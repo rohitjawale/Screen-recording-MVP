@@ -14,14 +14,21 @@ export interface EditorConfig {
   aspectRatio: 'original' | '16:9' | '1:1' | '4:3' | '9:16';
   zoom: number;
   autoZoom: boolean; // New feature: Auto-follow cursor simulation
+  // Animation Settings
+  zoomSpeed: 'slow' | 'default' | 'fast';
 }
+
+export type ZoomEventType = 'click' | 'double_click' | 'focus' | 'drag' | 'selection' | 'generic';
 
 export interface ZoomEvent {
   id: string;
+  type: ZoomEventType;
   startTime: number; // Seconds
   duration: number; // Seconds
-  x: number; // 0-1 (Target X)
-  y: number; // 0-1 (Target Y)
+  x: number; // 0-1 (Target X Start)
+  y: number; // 0-1 (Target Y Start)
+  xEnd?: number; // 0-1 (Target X End - for Drags)
+  yEnd?: number; // 0-1 (Target Y End - for Drags)
   scale: number; // Target Zoom Level (e.g., 1.5)
 }
 
@@ -40,6 +47,7 @@ export const DEFAULT_EDITOR_CONFIG: EditorConfig = {
   aspectRatio: '16:9',
   zoom: 1,
   autoZoom: false,
+  zoomSpeed: 'default',
 };
 
 // Pre-defined fancy backgrounds

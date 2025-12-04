@@ -1,6 +1,6 @@
 import React from 'react';
-import { Play, Pause, SkipBack, SkipForward, Scissors, MousePointer2, ZoomIn } from 'lucide-react';
-import { ZoomEvent } from '../../types';
+import { Play, Pause, SkipBack, SkipForward, Scissors, MousePointer2, ZoomIn, Hand, MousePointerClick, TextCursor, Scan } from 'lucide-react';
+import { ZoomEvent, ZoomEventType } from '../../types';
 
 interface TimelineProps {
   isPlaying: boolean;
@@ -27,6 +27,43 @@ export const Timeline: React.FC<TimelineProps> = ({
   };
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+  // Helper to get visual properties for event types
+  const getEventStyle = (type: ZoomEventType) => {
+    switch (type) {
+      case 'click':
+      case 'double_click':
+        return { 
+          icon: MousePointerClick, 
+          gradient: 'from-amber-500/80 to-orange-500/80', 
+          border: 'border-orange-500/30' 
+        };
+      case 'focus':
+        return { 
+          icon: TextCursor, 
+          gradient: 'from-blue-500/80 to-cyan-500/80', 
+          border: 'border-cyan-500/30' 
+        };
+      case 'drag':
+        return { 
+          icon: Hand, 
+          gradient: 'from-purple-500/80 to-pink-500/80', 
+          border: 'border-pink-500/30' 
+        };
+      case 'selection':
+        return { 
+          icon: Scan, 
+          gradient: 'from-emerald-500/80 to-green-500/80', 
+          border: 'border-green-500/30' 
+        };
+      default:
+        return { 
+          icon: ZoomIn, 
+          gradient: 'from-gray-600/80 to-gray-500/80', 
+          border: 'border-white/20' 
+        };
+    }
+  };
 
   return (
     <div className="h-[220px] bg-[#1E1E1E] border-t border-white/5 flex flex-col z-20">
@@ -113,15 +150,16 @@ export const Timeline: React.FC<TimelineProps> = ({
                     {zoomEvents.map((evt) => {
                       const startPct = duration > 0 ? (evt.startTime / duration) * 100 : 0;
                       const widthPct = duration > 0 ? (evt.duration / duration) * 100 : 0;
+                      const { icon: Icon, gradient, border } = getEventStyle(evt.type);
                       
                       return (
                         <div 
                           key={evt.id} 
-                          className="absolute h-5 bg-gradient-to-r from-blue-500/80 to-purple-500/80 border border-white/20 rounded-md flex items-center justify-center shadow-md hover:brightness-110 group transition-all"
+                          className={`absolute h-5 bg-gradient-to-r ${gradient} border ${border} rounded-md flex items-center justify-center shadow-md hover:brightness-110 group transition-all`}
                           style={{ left: `${startPct}%`, width: `${widthPct}%` }}
-                          title={`Zoom: ${evt.scale}x`}
+                          title={`${evt.type.toUpperCase()}: ${evt.scale}x`}
                         >
-                            <ZoomIn size={10} className="text-white group-hover:scale-110 transition-transform" />
+                            <Icon size={10} className="text-white group-hover:scale-110 transition-transform" />
                             {/* Resize Handle Simulation */}
                             <div className="absolute right-0 top-0 bottom-0 w-1 cursor-e-resize hover:bg-white/50" />
                             <div className="absolute left-0 top-0 bottom-0 w-1 cursor-w-resize hover:bg-white/50" />

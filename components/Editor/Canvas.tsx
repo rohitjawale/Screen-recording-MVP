@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { EditorConfig, ZoomEvent } from '../../types';
+import { MousePointerClick, TextCursor, Hand, Scan, MousePointer2 } from 'lucide-react';
 
 interface CanvasProps {
   config: EditorConfig;
@@ -11,7 +12,7 @@ interface CanvasProps {
   zoomEvents: ZoomEvent[];
 }
 
-// Easing functions
+// Easing functions for the Target Calculation
 const easeOutBack = (x: number): number => {
   const c1 = 1.70158;
   const c3 = c1 + 1;
@@ -25,6 +26,9 @@ const easeOutQuad = (x: number): number => {
 // Clamp value between min and max
 const clamp = (val: number, min: number, max: number) => Math.max(min, Math.min(max, val));
 
+// Linear Interpolation
+const lerp = (start: number, end: number, t: number) => start * (1 - t) + end * t;
+
 export const Canvas: React.FC<CanvasProps> = ({ 
   config, 
   videoUrl, 
@@ -35,12 +39,23 @@ export const Canvas: React.FC<CanvasProps> = ({
   zoomEvents
 }) => {
   
-  // State for camera transformation
-  // x, y are normalized 0-1 relative to the video frame
-  // zoom is the scale factor
+  // State for rendering. We use state to trigger React re-renders which update the styles.
   const [cameraState, setCameraState] = useState({ x: 0.5, y: 0.5, zoom: 1 });
+  const [activeEventType, setActiveEventType] = useState<ZoomEvent['type'] | null>(null);
+  
+  // Refs to hold the continuous value between frames to support smooth lerping
+  const currentCamera = useRef({ x: 0.5, y: 0.5, zoom: 1 });
   
   const animationFrameRef = useRef<number>(0);
+
+  // Get smoothing factor based on config
+  const getLerpFactor = () => {
+     switch(config.zoomSpeed) {
+         case 'slow': return 0.03;
+         case 'fast': return 0.15;
+         default: return 0.08;
+     }
+  };
 
   // Animation Loop
   const animate = () => {
@@ -51,101 +66,93 @@ export const Canvas: React.FC<CanvasProps> = ({
         let targetX = 0.5;
         let targetY = 0.5;
         let targetZoom = 1;
+        let currentEvent = null;
 
-        // Find relevant zoom events
-        // 1. Anticipation (Pre-zoom) phase: Starts 200ms before event
+        // --- 1. Calculate TARGET state based on Timeline ---
         const preZoomEvent = zoomEvents.find(e => currentTime >= e.startTime - 0.2 && currentTime < e.startTime);
-        
-        // 2. Active Zoom phase: During the event
         const activeEvent = zoomEvents.find(e => currentTime >= e.startTime && currentTime < e.startTime + e.duration);
-        
-        // 3. Post-event (Release): A short window after event to zoom out smoothly? 
-        // For now, we just default to center if no event.
 
         if (preZoomEvent) {
-             // Anticipation Logic:
-             // Zoom to 1.05x
-             // Move slightly towards target?
+             // Anticipation
              const t = (currentTime - (preZoomEvent.startTime - 0.2)) / 0.2; // 0 to 1
              const easedT = easeOutQuad(t);
              
-             targetZoom = 1 + (0.05 * easedT); // 1.0 -> 1.05
-             
-             // Slightly drift camera towards target to hint direction
+             targetZoom = 1 + (0.05 * easedT); 
+             // Slight drift
              targetX = 0.5 + (preZoomEvent.x - 0.5) * 0.1 * easedT;
              targetY = 0.5 + (preZoomEvent.y - 0.5) * 0.1 * easedT;
              
         } else if (activeEvent) {
-             // Activation Logic:
-             // Transition from 1.05 (or 1.0) to Target Scale
-             // Duration of transition: ~350ms
+             currentEvent = activeEvent;
+             // Activation with Bounce
              const transitionDuration = 0.35;
              const timeInEvent = currentTime - activeEvent.startTime;
              
+             // Dynamic Target Calculation (Supports Dragging)
+             // If xEnd/yEnd exist, we interpolate the Target position over the duration of the event
+             let eventTargetX = activeEvent.x;
+             let eventTargetY = activeEvent.y;
+
+             if (activeEvent.type === 'drag' && activeEvent.xEnd !== undefined && activeEvent.yEnd !== undefined) {
+                 const dragProgress = Math.min(1, timeInEvent / activeEvent.duration);
+                 // Linear drag for now, could be eased
+                 eventTargetX = lerp(activeEvent.x, activeEvent.xEnd, dragProgress);
+                 eventTargetY = lerp(activeEvent.y, activeEvent.yEnd, dragProgress);
+             }
+
              if (timeInEvent < transitionDuration) {
                  // Zooming In Phase
                  const t = timeInEvent / transitionDuration;
-                 const easedT = easeOutBack(t); // Bounce effect
+                 const easedT = easeOutBack(t); // Bounce
                  
-                 // Start from 1.05 (if coming from pre-zoom)
                  const startZoom = 1.05; 
                  targetZoom = startZoom + (activeEvent.scale - startZoom) * easedT;
                  
-                 // Pan to target
-                 // We don't bounce position as much, just smooth ease
                  const posEasedT = easeOutQuad(t);
                  
-                 // We need to lerp from wherever we were (likely center or pre-zoom drift) to target
-                 // Approximation: Start from 0.5 (center) for simplicity in stateless anim
-                 targetX = 0.5 + (activeEvent.x - 0.5) * posEasedT;
-                 targetY = 0.5 + (activeEvent.y - 0.5) * posEasedT;
+                 // Interpolate from Center (0.5) to the Calculated Event Target
+                 // Note: Ideally we interpolate from 'previous position' but 0.5 is a safe fallback for stateless logic
+                 targetX = 0.5 + (eventTargetX - 0.5) * posEasedT;
+                 targetY = 0.5 + (eventTargetY - 0.5) * posEasedT;
 
              } else {
                  // Held Phase
                  targetZoom = activeEvent.scale;
-                 targetX = activeEvent.x;
-                 targetY = activeEvent.y;
+                 targetX = eventTargetX;
+                 targetY = eventTargetY;
              }
         } else {
-             // Idle / Zoom Out
-             // We can check if we just finished an event to animate zoom out, 
-             // but simpler for now is to just ease back to 1.0 continuously
-             // We'll rely on CSS transition for the smooth "Zoom Out" when `autoZoom` is toggleable, 
-             // but here we are setting state every frame.
-             
-             // Let's implement a simple "return to center" if no event matches
-             targetZoom = 1;
-             targetX = 0.5;
-             targetY = 0.5;
-             
-             // If we want a smooth zoom out after event, we would need to track "last event end time".
-             // For this MVP, let's assume direct mapping. 
-             // To make it less jerky, we could lerp `cameraState` to target here manually.
-             // But let's trust strict mapping for responsiveness first.
+            // IDLE / Zoom Out Phase
+            targetZoom = 1;
+            targetX = 0.5;
+            targetY = 0.5;
         }
         
-        // --- Clamping Logic ---
-        // We must ensure that the view never shows out-of-bounds (black bars)
-        // Visible width in % = 1 / targetZoom
-        // The center (x, y) must be confined so that the edges of visible area don't cross 0 or 1.
-        
-        // Half of visible dimension
+        // --- 2. Clamp Target to avoid black bars ---
+        // Ensure that the target focus point is valid given the current zoom.
+        // The Viewport width in % is 1/Zoom.
         const halfVisibleW = 0.5 / targetZoom;
         const halfVisibleH = 0.5 / targetZoom;
         
-        // Clamp X: [halfVisibleW, 1 - halfVisibleW]
-        const clampedX = clamp(targetX, halfVisibleW, 1 - halfVisibleW);
-        const clampedY = clamp(targetY, halfVisibleH, 1 - halfVisibleH);
+        targetX = clamp(targetX, halfVisibleW, 1 - halfVisibleW);
+        targetY = clamp(targetY, halfVisibleH, 1 - halfVisibleH);
 
-        setCameraState({
-            x: clampedX,
-            y: clampedY,
-            zoom: targetZoom
-        });
+        // --- 3. Interpolate Current towards Target (Smoothing) ---
+        const factor = getLerpFactor();
+        
+        currentCamera.current.x = lerp(currentCamera.current.x, targetX, factor);
+        currentCamera.current.y = lerp(currentCamera.current.y, targetY, factor);
+        currentCamera.current.zoom = lerp(currentCamera.current.zoom, targetZoom, factor);
+        
+        // Update React State
+        setCameraState({...currentCamera.current});
+        setActiveEventType(currentEvent ? currentEvent.type : null);
 
     } else {
         // Reset if disabled
         setCameraState({ x: 0.5, y: 0.5, zoom: 1 });
+        currentCamera.current = { x: 0.5, y: 0.5, zoom: 1 };
+        setActiveEventType(null);
     }
     
     if (isPlaying) {
@@ -165,33 +172,49 @@ export const Canvas: React.FC<CanvasProps> = ({
       }
     }
     return () => cancelAnimationFrame(animationFrameRef.current);
-  }, [isPlaying, config.autoZoom]); 
+  }, [isPlaying, config.autoZoom, config.zoomSpeed]); 
   
-  // Handle seek updates for camera position
+  // Handle seek updates
   const handleTimeUpdate = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
       const vid = e.currentTarget;
       onTimeUpdate(vid.currentTime);
       
       if (!isPlaying && config.autoZoom) {
-         // Run single frame calculation logic (duplicated for now from animate to ensure seek updates view)
-         // For simplicity, just calling animate once would set state, but animate uses requestAnimationFrame.
-         // Let's copy the pure state calculation logic or just force a re-render tick.
-         // To stay DRY, we'll just run one tick of logic roughly:
-         
          const currentTime = vid.currentTime;
          const activeEvent = zoomEvents.find(e => currentTime >= e.startTime && currentTime < e.startTime + e.duration);
+         const preZoomEvent = zoomEvents.find(e => currentTime >= e.startTime - 0.2 && currentTime < e.startTime);
          
-         if (activeEvent) {
-             const halfVisibleW = 0.5 / activeEvent.scale;
-             const halfVisibleH = 0.5 / activeEvent.scale;
-             setCameraState({
-                 x: clamp(activeEvent.x, halfVisibleW, 1 - halfVisibleW),
-                 y: clamp(activeEvent.y, halfVisibleH, 1 - halfVisibleH),
-                 zoom: activeEvent.scale
-             });
-         } else {
-             setCameraState({ x: 0.5, y: 0.5, zoom: 1 });
+         let targetX = 0.5, targetY = 0.5, targetZoom = 1;
+
+         if (preZoomEvent) {
+             targetZoom = 1.05;
+             targetX = 0.5 + (preZoomEvent.x - 0.5) * 0.1;
+             targetY = 0.5 + (preZoomEvent.y - 0.5) * 0.1;
+         } else if (activeEvent) {
+             targetZoom = activeEvent.scale;
+             targetX = activeEvent.x;
+             targetY = activeEvent.y;
+             
+             // Handle seek in drag event (snap to interpolated position)
+             if (activeEvent.type === 'drag' && activeEvent.xEnd !== undefined && activeEvent.yEnd !== undefined) {
+                 const timeInEvent = currentTime - activeEvent.startTime;
+                 const dragProgress = Math.min(1, timeInEvent / activeEvent.duration);
+                 targetX = lerp(activeEvent.x, activeEvent.xEnd, dragProgress);
+                 targetY = lerp(activeEvent.y, activeEvent.yEnd, dragProgress);
+             }
          }
+
+         // Clamp
+         const halfVisibleW = 0.5 / targetZoom;
+         const halfVisibleH = 0.5 / targetZoom;
+         targetX = clamp(targetX, halfVisibleW, 1 - halfVisibleW);
+         targetY = clamp(targetY, halfVisibleH, 1 - halfVisibleH);
+
+         // Update state directly (Snap)
+         const newState = { x: targetX, y: targetY, zoom: targetZoom };
+         setCameraState(newState);
+         currentCamera.current = newState;
+         setActiveEventType(activeEvent ? activeEvent.type : null);
       }
   };
 
@@ -205,21 +228,20 @@ export const Canvas: React.FC<CanvasProps> = ({
     }
   };
 
-  // Transform calculation
-  // Translate formula for center-based pan: (0.5 - pos * Zoom) * 100%
-  // But wait, if we clamped X/Y to be center, we can just use that.
-  
-  // Center of screen is 50%. 
-  // We want the point `cameraState.x` (which is 0..1 on the video) to be at the center of the viewport.
-  // CSS transform scale scales from center (or defined origin). 
-  // Let's use transform-origin: 0 0 (Top Left) for easier math.
-  // If Origin is 0,0:
-  // To center point P(x,y) at Viewport Center (0.5, 0.5):
-  // Translate = ViewportCenter - P_scaled
-  // TranslateX = 0.5 - (x * zoom) (in units of width) -> * 100 %
-  
   const translateX = (0.5 - cameraState.x * cameraState.zoom) * 100;
   const translateY = (0.5 - cameraState.y * cameraState.zoom) * 100;
+
+  // Icon Helper
+  const EventIcon = () => {
+      switch(activeEventType) {
+          case 'click':
+          case 'double_click': return <MousePointerClick className="text-orange-500 drop-shadow-lg" size={32} />;
+          case 'focus': return <TextCursor className="text-blue-500 drop-shadow-lg" size={32} />;
+          case 'drag': return <Hand className="text-pink-500 drop-shadow-lg" size={32} />;
+          case 'selection': return <Scan className="text-green-500 drop-shadow-lg" size={32} />;
+          default: return null;
+      }
+  };
 
   return (
     <div className="flex-1 bg-[#121212] overflow-hidden flex items-center justify-center relative">
@@ -252,9 +274,7 @@ export const Canvas: React.FC<CanvasProps> = ({
                style={{
                  transformOrigin: '0 0',
                  transform: `translate(${translateX}%, ${translateY}%) scale(${cameraState.zoom})`,
-                 // Use CSS transition for smooth zoom-out when event ends, 
-                 // but disable it during event (since we manually animate via JS)
-                 transition: (isPlaying && config.autoZoom) ? 'none' : 'transform 0.5s cubic-bezier(0.25, 1, 0.5, 1)'
+                 transition: 'none' 
                }}
              >
                <video
@@ -268,7 +288,14 @@ export const Canvas: React.FC<CanvasProps> = ({
                  muted={false} 
                />
                
-               {/* NOTE: Fake cursor removed as requested */}
+               {/* Event Type Indicator Overlay (Subtle) */}
+               {config.autoZoom && activeEventType && (
+                   <div className="absolute top-4 right-4 z-20 animate-fade-in opacity-80 scale-[1]">
+                       <div className="bg-black/50 backdrop-blur-sm p-2 rounded-full border border-white/10">
+                           <EventIcon />
+                       </div>
+                   </div>
+               )}
              </div>
           </div>
        </div>
