@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { EditorConfig, VideoMetadata, DEFAULT_EDITOR_CONFIG } from '../../types';
+import React, { useState, useRef, useEffect } from 'react';
+import { EditorConfig, VideoMetadata, DEFAULT_EDITOR_CONFIG, ZoomEvent } from '../../types';
 import { Sidebar } from './Sidebar';
 import { Canvas } from './Canvas';
 import { Timeline } from './Timeline';
@@ -13,7 +13,18 @@ export const Editor: React.FC<EditorProps> = ({ videoMetadata }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [zoomEvents, setZoomEvents] = useState<ZoomEvent[]>([]);
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Initialize some mock zoom events once metadata is loaded or just on mount
+  // In a real app, these would be detected via CV or passed from recording metadata
+  useEffect(() => {
+     setZoomEvents([
+       { id: '1', startTime: 2, duration: 3, x: 0.2, y: 0.3, scale: 1.5 },
+       { id: '2', startTime: 8, duration: 4, x: 0.8, y: 0.7, scale: 1.6 },
+       { id: '3', startTime: 15, duration: 2.5, x: 0.5, y: 0.5, scale: 1.4 },
+     ]);
+  }, []);
 
   const handleSeek = (time: number) => {
     if (videoRef.current) {
@@ -49,6 +60,7 @@ export const Editor: React.FC<EditorProps> = ({ videoMetadata }) => {
           onTimeUpdate={setCurrentTime}
           onDurationChange={setDuration}
           videoRef={videoRef}
+          zoomEvents={zoomEvents}
         />
         
         <Timeline 
@@ -57,6 +69,7 @@ export const Editor: React.FC<EditorProps> = ({ videoMetadata }) => {
           currentTime={currentTime}
           duration={duration}
           onSeek={handleSeek}
+          zoomEvents={zoomEvents}
         />
       </div>
     </div>

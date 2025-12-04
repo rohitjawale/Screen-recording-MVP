@@ -1,5 +1,6 @@
 import React from 'react';
-import { Play, Pause, SkipBack, SkipForward, Scissors, MousePointer2, ZoomIn, Zap } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Scissors, MousePointer2, ZoomIn } from 'lucide-react';
+import { ZoomEvent } from '../../types';
 
 interface TimelineProps {
   isPlaying: boolean;
@@ -7,6 +8,7 @@ interface TimelineProps {
   currentTime: number;
   duration: number;
   onSeek: (time: number) => void;
+  zoomEvents: ZoomEvent[];
 }
 
 export const Timeline: React.FC<TimelineProps> = ({ 
@@ -14,7 +16,8 @@ export const Timeline: React.FC<TimelineProps> = ({
   onTogglePlay, 
   currentTime, 
   duration, 
-  onSeek 
+  onSeek,
+  zoomEvents
 }) => {
   
   const formatTime = (time: number) => {
@@ -24,10 +27,6 @@ export const Timeline: React.FC<TimelineProps> = ({
   };
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
-
-  // Mock markers for zoom events
-  const zoomMarkers = [15, 45, 70]; // Percentages
-  const clickMarkers = [10, 32, 55, 88]; // Percentages
 
   return (
     <div className="h-[220px] bg-[#1E1E1E] border-t border-white/5 flex flex-col z-20">
@@ -110,26 +109,25 @@ export const Timeline: React.FC<TimelineProps> = ({
                 <div className="absolute inset-0 flex items-center px-2">
                     <span className="text-[9px] text-gray-600 font-semibold uppercase tracking-wider mr-4 w-12 shrink-0">Events</span>
                     
-                    {/* Mock Zoom Regions */}
-                    {zoomMarkers.map((pos, i) => (
+                    {/* Render actual ZoomEvents */}
+                    {zoomEvents.map((evt) => {
+                      const startPct = duration > 0 ? (evt.startTime / duration) * 100 : 0;
+                      const widthPct = duration > 0 ? (evt.duration / duration) * 100 : 0;
+                      
+                      return (
                         <div 
-                          key={`zoom-${i}`} 
-                          className="absolute h-5 bg-purple-500/20 border border-purple-500/40 rounded flex items-center justify-center"
-                          style={{ left: `${pos}%`, width: '10%' }}
+                          key={evt.id} 
+                          className="absolute h-5 bg-gradient-to-r from-blue-500/80 to-purple-500/80 border border-white/20 rounded-md flex items-center justify-center shadow-md hover:brightness-110 group transition-all"
+                          style={{ left: `${startPct}%`, width: `${widthPct}%` }}
+                          title={`Zoom: ${evt.scale}x`}
                         >
-                            <ZoomIn size={10} className="text-purple-400" />
+                            <ZoomIn size={10} className="text-white group-hover:scale-110 transition-transform" />
+                            {/* Resize Handle Simulation */}
+                            <div className="absolute right-0 top-0 bottom-0 w-1 cursor-e-resize hover:bg-white/50" />
+                            <div className="absolute left-0 top-0 bottom-0 w-1 cursor-w-resize hover:bg-white/50" />
                         </div>
-                    ))}
-
-                    {/* Mock Click Events */}
-                    {clickMarkers.map((pos, i) => (
-                        <div 
-                            key={`click-${i}`}
-                            className="absolute h-3 w-3 rounded-full bg-yellow-500/80 border border-yellow-300 shadow-sm"
-                            style={{ left: `${pos}%`, top: '50%', transform: 'translateY(-50%)' }}
-                            title="Mouse Click"
-                        />
-                    ))}
+                      );
+                    })}
                 </div>
              </div>
          </div>

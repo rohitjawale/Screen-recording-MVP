@@ -16,6 +16,15 @@ export interface EditorConfig {
   autoZoom: boolean; // New feature: Auto-follow cursor simulation
 }
 
+export interface ZoomEvent {
+  id: string;
+  startTime: number; // Seconds
+  duration: number; // Seconds
+  x: number; // 0-1 (Target X)
+  y: number; // 0-1 (Target Y)
+  scale: number; // Target Zoom Level (e.g., 1.5)
+}
+
 export interface VideoMetadata {
   blob: Blob;
   url: string;
