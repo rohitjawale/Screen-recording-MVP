@@ -11,97 +11,73 @@ export default function App() {
   const [isPaused, setIsPaused] = useState(false);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const streamRef = useRef<MediaStream | null>(null);
+  const chunks = useRef<Blob[]>([]);
+  const activeStreamRef = useRef<MediaStream | null>(null);
 
   const startRecording = async (withAudio: boolean) => {
     try {
-      // 1. Get Display Media (Screen)
-      // We use simplified constraints to ensure the dialog opens on all devices/browsers.
+      // 1. Get Screen Stream (Video + System Audio)
       const displayStream = await navigator.mediaDevices.getDisplayMedia({
-        video: {
-          displaySurface: "browser", 
-        },
+        video: true,
         audio: true 
       });
 
-      // 2. Optional: Get Microphone
+      // 2. Prepare Final Stream
       let finalStream = displayStream;
+
+      // 3. If Mic Audio Requested, merge tracks
       if (withAudio) {
-        try {
-          const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          // Combine tracks: Keep all video tracks from screen, add audio tracks from mic
-          // Note: If displayStream has system audio, we might have multiple audio tracks.
-          finalStream = new MediaStream([
-            ...displayStream.getVideoTracks(),
-            ...audioStream.getAudioTracks(),
-            ...displayStream.getAudioTracks() // Include system audio if picked
-          ]);
-        } catch (err) {
-          console.warn("Microphone access denied or failed", err);
-        }
+         try {
+           const audioStream = await navigator.mediaDevices.getUserMedia({
+             audio: true,
+             video: false
+           });
+           
+           // Combine tracks: Screen Video + Screen Audio + Mic Audio
+           const tracks = [
+             ...displayStream.getVideoTracks(),
+             ...displayStream.getAudioTracks(),
+             ...audioStream.getAudioTracks()
+           ];
+           finalStream = new MediaStream(tracks);
+         } catch (e) {
+           console.warn("Microphone access failed or denied. Continuing with system audio only.", e);
+         }
       }
 
-      streamRef.current = finalStream;
-      
-      // 3. Setup Recorder
-      // Check for supported mime types to prevent crashes on Safari/Firefox
+      activeStreamRef.current = finalStream;
+
+      // 4. Setup MediaRecorder
       const mimeType = MediaRecorder.isTypeSupported('video/webm; codecs=vp9') 
         ? 'video/webm; codecs=vp9' 
         : 'video/webm';
 
       const recorder = new MediaRecorder(finalStream, { mimeType });
       mediaRecorderRef.current = recorder;
-      chunksRef.current = [];
+      chunks.current = [];
 
       recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
+        if (e.data.size > 0) chunks.current.push(e.data);
       };
 
       recorder.onstop = () => {
-        // Create Blob
-        const blob = new Blob(chunksRef.current, { type: 'video/webm' });
-        const url = URL.createObjectURL(blob);
-        
-        // Transition to Processing
-        setAppState(AppState.PROCESSING);
-        
-        // Simulate Processing Delay for UX
-        setTimeout(() => {
-          setVideoMetadata({
-            blob,
-            url,
-            duration: 0 // Will be set by video element
-          });
-          setAppState(AppState.EDITING);
-        }, 2000);
-        
-        // Cleanup tracks
-        streamRef.current?.getTracks().forEach(track => track.stop());
+         finalizeRecording();
+      };
+      
+      // Stop if user clicks "Stop Sharing" in browser UI
+      displayStream.getVideoTracks()[0].onended = () => {
+        stopRecording();
       };
 
-      // Detect if user stops via browser UI (e.g. the floating browser "Stop Sharing" bar)
-      const videoTrack = displayStream.getVideoTracks()[0];
-      if (videoTrack) {
-        videoTrack.onended = () => {
-          // Only stop if we are currently recording or paused (not already processing)
-          // We check the ref directly to avoid closure stale state issues
-          if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-            stopRecording();
-          }
-        };
-      }
-
-      recorder.start();
+      recorder.start(1000);
       setAppState(AppState.RECORDING);
 
     } catch (err) {
       console.error("Error starting recording:", err);
-      // If the error is NotAllowedError, it usually means the user cancelled the dialog 
-      // OR the iframe permission is missing. 
       if (err instanceof Error && err.name !== 'NotAllowedError') {
         alert(`Failed to start recording: ${err.message}`);
       }
+      cleanup();
     }
   };
 
@@ -111,42 +87,64 @@ export default function App() {
     }
   };
 
+  const finalizeRecording = () => {
+    setAppState(AppState.PROCESSING);
+
+    // Give a moment for last chunks to arrive
+    setTimeout(() => {
+        const blob = new Blob(chunks.current, { type: 'video/webm' });
+        const url = URL.createObjectURL(blob);
+        
+        cleanup();
+
+        setVideoMetadata({
+            blob,
+            url,
+            duration: 0, // Will be determined by video element on load
+        });
+        
+        setAppState(AppState.EDITING);
+    }, 1000);
+  };
+
+  const cleanup = () => {
+      if (activeStreamRef.current) {
+        activeStreamRef.current.getTracks().forEach(track => track.stop());
+        activeStreamRef.current = null;
+      }
+  };
+
   const pauseRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.pause();
-      setIsPaused(true);
-    }
+    if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.pause();
+    setIsPaused(true);
   };
 
   const resumeRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') {
-      mediaRecorderRef.current.resume();
-      setIsPaused(false);
-    }
+    if (mediaRecorderRef.current?.state === 'paused') mediaRecorderRef.current.resume();
+    setIsPaused(false);
   };
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-black text-white font-sans">
       {appState === AppState.IDLE && (
         <StartScreen onStartRecording={startRecording} />
       )}
 
       {appState === AppState.RECORDING && (
         <>
-          {/* Overlay renders inside the app. 
-              Note: This overlay is only visible if the user looks at this specific tab/window. 
-              Actual screen recording continues in background. */}
-          <div className="fixed inset-0 bg-white/80 flex flex-col items-center justify-center text-gray-800 z-50">
-             <div className="mb-8 text-center animate-pulse">
-                <h1 className="text-4xl font-bold text-gray-900 mb-2">Recording in Progress</h1>
-                <p className="text-gray-500">Go to your selected tab. This overlay controls the recording.</p>
+          <div className="fixed inset-0 bg-transparent pointer-events-none z-50">
+             <div className="absolute top-10 left-1/2 -translate-x-1/2 bg-black/50 backdrop-blur-md px-6 py-2 rounded-full border border-white/10 pointer-events-auto">
+                <p className="text-gray-200 text-sm font-medium">Recording... Switch to your target tab.</p>
              </div>
-             <RecordingOverlay 
-               onStop={stopRecording} 
-               onPause={pauseRecording}
-               onResume={resumeRecording}
-               isPaused={isPaused}
-             />
+
+             <div className="pointer-events-auto">
+                 <RecordingOverlay 
+                   onStop={stopRecording} 
+                   onPause={pauseRecording}
+                   onResume={resumeRecording}
+                   isPaused={isPaused}
+                 />
+             </div>
           </div>
         </>
       )}

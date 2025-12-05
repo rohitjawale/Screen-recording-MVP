@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { EditorConfig, BACKGROUND_PRESETS } from '../../types';
-import { Sliders, Maximize, Circle, BoxSelect, Download, Sparkles, MousePointer2, Zap, Layers, Activity } from 'lucide-react';
+import { Sliders, Maximize, Circle, BoxSelect, Download, Sparkles, MousePointer2, Zap, Layers, Activity, ZoomIn } from 'lucide-react';
 
 interface SidebarProps {
   config: EditorConfig;
@@ -15,21 +15,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ config, onChange, onExport }) 
     onChange({ ...config, [key]: value });
   };
 
-  const SliderControl = ({ label, icon: Icon, value, min, max, settingKey }: any) => (
+  const SliderControl = ({ label, icon: Icon, value, min, max, step = 1, settingKey, formatFn }: any) => (
     <div className="mb-6">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2 text-gray-400 text-xs uppercase tracking-wider font-semibold">
           <Icon size={12} />
           {label}
         </div>
-        <span className="text-xs text-gray-500 font-mono">{value}px</span>
+        <span className="text-xs text-gray-500 font-mono">{formatFn ? formatFn(value) : `${value}px`}</span>
       </div>
       <input
         type="range"
         min={min}
         max={max}
+        step={step}
         value={value}
-        onChange={(e) => handleChange(settingKey, parseInt(e.target.value))}
+        onChange={(e) => handleChange(settingKey, parseFloat(e.target.value))}
         className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500 hover:accent-blue-400 focus:outline-none"
       />
     </div>
@@ -149,6 +150,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ config, onChange, onExport }) 
                  Smartly tracks cursor activity and zooms in on key actions.
                </p>
             </div>
+
+            {/* Zoom Level Slider */}
+            <SliderControl 
+              label="Zoom Scale" 
+              icon={ZoomIn} 
+              value={config.zoom} 
+              min={1} max={3} step={0.1}
+              settingKey="zoom" 
+              formatFn={(v: number) => `${v.toFixed(1)}x`}
+            />
 
             {/* Zoom Speed */}
             <div className="mb-8">

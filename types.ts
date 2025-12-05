@@ -1,3 +1,4 @@
+
 export enum AppState {
   IDLE = 'IDLE',
   RECORDING = 'RECORDING',
@@ -30,6 +31,27 @@ export interface ZoomEvent {
   xEnd?: number; // 0-1 (Target X End - for Drags)
   yEnd?: number; // 0-1 (Target Y End - for Drags)
   scale: number; // Target Zoom Level (e.g., 1.5)
+}
+
+export type OverlayType = 'blur' | 'spotlight';
+
+export interface OverlayItem {
+  id: string;
+  type: OverlayType;
+  startTime: number;
+  duration: number;
+  x: number; // 0-1 Relative to video
+  y: number; // 0-1 Relative to video
+  width: number; // 0-1 Relative to video
+  height: number; // 0-1 Relative to video
+}
+
+export interface CropState {
+  active: boolean;
+  x: number; // 0-1
+  y: number; // 0-1
+  width: number; // 0-1
+  height: number; // 0-1
 }
 
 export interface VideoMetadata {
